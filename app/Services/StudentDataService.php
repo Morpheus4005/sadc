@@ -18,6 +18,8 @@ class StudentDataService
             $spreadsheet = IOFactory::load($file->getRealPath());
             $sheetNames = $spreadsheet->getSheetNames();
             
+            Log::info('Sheet names found: ' . implode(', ', $sheetNames));
+            
             // Detect format
             if (in_array('Data All', $sheetNames)) {
                 // FORMAT LAMA (Follow_Up_Genap_25_2.xlsx)
@@ -62,6 +64,8 @@ class StudentDataService
             
             $currentPeriode = PeriodeHelper::getCurrentPeriode();
             $highestRow = $worksheet->getHighestRow();
+            
+            Log::info("Processing OLD format: {$highestRow} rows");
             
             $imported = 0;
             $updated = 0;
@@ -174,6 +178,8 @@ class StudentDataService
                 }
             }
             
+            Log::info("OLD format import completed: {$imported} imported, {$updated} updated");
+            
             return [
                 'success' => true,
                 'imported' => $imported,
@@ -206,9 +212,19 @@ class StudentDataService
             $currentPeriode = PeriodeHelper::getCurrentPeriode();
             $highestRow = $worksheet->getHighestRow();
             
+            Log::info("Processing NEW format: {$highestRow} rows");
+            
+            // DEBUG: Check header row
+            $headers = [];
+            for ($col = 'A'; $col <= 'N'; $col++) {
+                $headers[$col] = $worksheet->getCell("{$col}1")->getValue();
+            }
+            Log::info("Header row: ", $headers);
+            
             $imported = 0;
             $updated = 0;
             $errors = [];
+            $skipped = 0;
             
             // Start from row 2 (skip header)
             for ($row = 2; $row <= $highestRow; $row++) {
@@ -246,6 +262,10 @@ class StudentDataService
                     
                     // Skip empty rows
                     if (empty($nim) || empty($name)) {
+                        $skipped++;
+                        if ($row % 50 === 0) {
+                            Log::info("Row {$row}: Skipped (empty NIM or Name)");
+                        }
                         continue;
                     }
                     
@@ -256,7 +276,19 @@ class StudentDataService
                     
                     // Combine notes
                     $notesSrsc = "Status 25.20: {$status2520}";
-                    $keterangan = "Req Term: {$reqTerm}, Kontak Ortu: {$noKontakOrtu}";
+                    if ($leaveStartForm) {
+                        $notesSrsc .= " | Leave Form: {$leaveStartForm}";
+                    }
+                    
+                    $keterangan = "Req Term: {$reqTerm}";
+                    if ($noKontakOrtu) {
+                        $keterangan .= " | Kontak Ortu: {$noKontakOrtu}";
+                    }
+                    
+                    // Log every 50 rows
+                    if ($row % 50 === 0) {
+                        Log::info("Row {$row}: NIM={$nim}, Status={$status}, Status2520={$status2520}, StatusWarna={$statusWarna}");
+                    }
                     
                     // Check if student exists
                     $existingStudent = Student::withTrashed()
@@ -324,6 +356,8 @@ class StudentDataService
                 }
             }
             
+            Log::info("NEW format import completed: {$imported} imported, {$updated} updated, {$skipped} skipped");
+            
             return [
                 'success' => true,
                 'imported' => $imported,
@@ -342,8 +376,10 @@ class StudentDataService
      */
     private function mapStatusNewFormat($status, $status2520)
     {
-        $statusLower = strtolower($status ?? '');
-        $status2520Lower = strtolower($status2520 ?? '');
+        $statusLower = strtolower(trim($status ?? ''));
+        $status2520Lower = strtolower(trim($status2520 ?? ''));
+        
+        Log::info("Mapping status: Status='{$status}', Status2520='{$status2520}'");
         
         // Priority 1: Check Status 25.20
         if (str_contains($status2520Lower, 'active') && !str_contains($status2520Lower, 'not')) {
@@ -371,7 +407,9 @@ class StudentDataService
             return 'Undur Diri';
         }
         
-        return 'Tidak Terhubung'; // Default
+        // Default to empty status for unknown
+        Log::warning("Unknown status combination: Status='{$status}', Status2520='{$status2520}' - defaulting to empty");
+        return null;
     }
     
     /**
@@ -379,7 +417,7 @@ class StudentDataService
      */
     private function getFacultyFromCareer($career)
     {
-        $career = strtoupper($career ?? '');
+        $career = strtoupper(trim($career ?? ''));
         
         $mapping = [
             'BDS1' => 'School of Design',
@@ -397,6 +435,7 @@ class StudentDataService
     
     /**
      * Map cell background color to status (OLD FORMAT)
+     * UPDATED: Added ORANGE for "Konfirmasi DO" and NULL for no color
      */
     private function mapColorToStatus($rgbColor)
     {
@@ -409,6 +448,11 @@ class StudentDataService
         
         if (strlen($color) < 6) {
             return null;
+        }
+        
+        // Default white/no color = null (empty status)
+        if (in_array($color, ['FFFFFF', 'FFFFFFFF', '000000'])) {
+            return null; // No status / empty
         }
         
         // EXACT COLOR MATCHING
@@ -443,6 +487,14 @@ class StudentDataService
             'FFFF00' => 'Terhubung Tapi Tidak Merespon',
             'FFFF99' => 'Terhubung Tapi Tidak Merespon',
             'FFEB9C' => 'Terhubung Tapi Tidak Merespon',
+            
+            // ORANGE - Konfirmasi DO (NEW!)
+            'FFA500' => 'Konfirmasi DO',
+            'FF8C00' => 'Konfirmasi DO',
+            'FFA500' => 'Konfirmasi DO',
+            'ED7D31' => 'Konfirmasi DO',
+            'F4B183' => 'Konfirmasi DO',
+            'FFC000' => 'Konfirmasi DO',
         ];
         
         if (isset($colorMap[$color])) {
@@ -453,6 +505,11 @@ class StudentDataService
         $r = hexdec(substr($color, 0, 2));
         $g = hexdec(substr($color, 2, 2));
         $b = hexdec(substr($color, 4, 2));
+        
+        // Orange detection (R > G > B)
+        if ($r > 200 && $g > 100 && $g < 180 && $b < 100 && $r > $g && $g > $b) {
+            return 'Konfirmasi DO';
+        }
         
         if ($b > 200 && $g > 200 && $r < 100) {
             return 'Proses Re-active';
@@ -478,6 +535,7 @@ class StudentDataService
             return 'Undur Diri';
         }
         
+        // Unknown color = return null (empty status)
         return null;
     }
     
@@ -492,6 +550,7 @@ class StudentDataService
             'Sudah Terdata Aktif 25.2' => 'Re-active',
             'Merespon' => 'Merespon tapi belum re-active',
             'Mengajukan Undur Diri/DO' => 'Undur Diri',
+            'Konfirmasi DO' => 'Konfirmasi DO', // NEW!
             'Belum Terhubung' => 'Tidak Terhubung',
             'Terhubung Tapi Tidak Merespon' => 'Terhubung Tapi Tidak Merespon',
             'Unofficial Leave' => 'Tidak Terhubung',
@@ -503,6 +562,10 @@ class StudentDataService
         
         // Fuzzy matching
         $lower = strtolower($tindakLanjut ?? '');
+        
+        if (str_contains($lower, 'konfirmasi do')) {
+            return 'Konfirmasi DO';
+        }
         
         if (str_contains($lower, 'reactive')) {
             if (str_contains($lower, 'proses') || str_contains($lower, 'pengajuan')) {
@@ -521,7 +584,7 @@ class StudentDataService
             return 'Undur Diri';
         }
         
-        return 'Tidak Terhubung';
+        return null; // Empty status for unknown
     }
     
     /**
@@ -533,8 +596,10 @@ class StudentDataService
             return null;
         }
         
-        // Handle formula values
+        // Handle formula values - keep the result
         if (is_string($value) && str_starts_with($value, '=')) {
+            // For formulas, PhpSpreadsheet usually returns calculated value
+            // If it returns the formula string, we skip it
             return null;
         }
         
@@ -632,7 +697,6 @@ class StudentDataService
         
         return Student::where('periode_akademik', $currentPeriode)
             ->select('status_warna', \DB::raw('count(*) as total'))
-            ->whereNotNull('status_warna')
             ->groupBy('status_warna')
             ->orderBy('total', 'desc')
             ->get();

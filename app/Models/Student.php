@@ -2,13 +2,12 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Student extends Model
 {
-    use HasFactory, SoftDeletes;
+    use SoftDeletes;
 
     protected $fillable = [
         'periode_akademik',
@@ -26,119 +25,44 @@ class Student extends Model
         'sks_sisa',
         'study_target_10',
         'study_target_14',
-        'prediksi_smt_selesai',  
-        'no_hp',                  
+        'prediksi_smt_selesai',
+        'no_hp',
         'notes_srsc',
         'status_warna',
+        'keterangan',
     ];
 
-    protected $casts = [
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-        'deleted_at' => 'datetime',
-    ];
+    protected $dates = ['deleted_at'];
 
     /**
-     * Get all changes for this student
-     */
-    public function changes()
-    {
-        return $this->hasMany(StudentChange::class);
-    }
-
-    /**
-     * Scope to filter by program
-     */
-    public function scopeByProgram($query, $program)
-    {
-        return $query->where('program', $program);
-    }
-
-    /**
-     * Scope to filter by tindak lanjut status
-     */
-    public function scopeByStatus($query, $status)
-    {
-        return $query->where('tindak_lanjut', $status);
-    }
-
-    /**
-     * Get recap summary by program
-     */
-    public static function getRecapByProgram()
-    {
-        return self::selectRaw('program, COUNT(*) as count')
-            ->groupBy('program')
-            ->orderBy('count', 'desc')
-            ->get();
-    }
-
-    /**
-     * Get recap summary by tindak lanjut status
-     */
-    public static function getRecapByStatus()
-    {
-        return self::selectRaw('tindak_lanjut, COUNT(*) as count')
-            ->groupBy('tindak_lanjut')
-            ->orderBy('count', 'desc')
-            ->get();
-    }
-
-    /**
-     * Get recap summary by evaluasi
-     */
-    public static function getRecapByEvaluasi()
-    {
-        return self::selectRaw('evaluasi, COUNT(*) as count')
-            ->groupBy('evaluasi')
-            ->get();
-    }
-
-    /**
-     * Search students by multiple criteria
-     */
-    public function scopeSearch($query, $search)
-    {
-        return $query->where(function($q) use ($search) {
-            $q->where('name', 'like', "%{$search}%")
-              ->orWhere('nim', 'like', "%{$search}%")
-              ->orWhere('binusian_id', 'like', "%{$search}%");
-        });
-    }
-
-    /**
-     * Get status color class
+     * Get CSS class for status badge
+     * UPDATED: Added Konfirmasi DO (orange) and empty status (gray)
      */
     public function getStatusColorClass()
     {
-        $colors = [
-            'Proses Re-active' => 'bg-cyan-100 text-cyan-800 border-cyan-300',
-            'Re-active' => 'bg-green-100 text-green-800 border-green-300',
-            'Merespon tapi belum re-active' => 'bg-purple-100 text-purple-800 border-purple-300',
-            'Undur Diri' => 'bg-amber-50 text-amber-800 border-amber-200',  // ← KRIM/BEIGE
-            'Tidak Terhubung' => 'bg-red-100 text-red-800 border-red-300',
-            'Terhubung Tapi Tidak Merespon' => 'bg-yellow-100 text-yellow-800 border-yellow-300',
-        ];
+        // Handle null/empty status
+        if (empty($this->status_warna)) {
+            return 'bg-gray-100 text-gray-700'; // Gray for no status
+        }
         
-        return $colors[$this->status_warna] ?? 'bg-gray-100 text-gray-800 border-gray-300';
+        $statusMap = [
+            'Proses Re-active' => 'bg-cyan-100 text-cyan-700',
+            'Re-active' => 'bg-green-100 text-green-700',
+            'Merespon tapi belum re-active' => 'bg-purple-100 text-purple-700',
+            'Undur Diri' => 'bg-amber-100 text-amber-700',
+            'Tidak Terhubung' => 'bg-red-100 text-red-700',
+            'Terhubung Tapi Tidak Merespon' => 'bg-yellow-100 text-yellow-700',
+            'Konfirmasi DO' => 'bg-orange-100 text-orange-700', // NEW: Orange
+        ];
+
+        return $statusMap[$this->status_warna] ?? 'bg-gray-100 text-gray-700';
     }
 
     /**
- * Scope untuk filter by periode
- */
-    public function scopePeriode($query, $periode)
-    {
-        return $query->where('periode_akademik', $periode);
-    }
-
-    /**
-     * Get list of available periodes
+     * Get display text for status (handle empty status)
      */
-    public static function getAvailablePeriodes()
+    public function getStatusDisplayText()
     {
-        return self::select('periode_akademik')
-            ->distinct()
-            ->orderBy('periode_akademik', 'desc')
-            ->pluck('periode_akademik');
+        return $this->status_warna ?: '(Tidak Ada Status)';
     }
 }

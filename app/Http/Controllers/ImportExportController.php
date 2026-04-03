@@ -21,6 +21,14 @@ class ImportExportController extends Controller
     /**
      * Show import form
      */
+    public function index()
+    {
+        return view('import.index');
+    }
+
+    /**
+     * Show import form
+     */
     public function import()
     {
         $currentPeriode = PeriodeHelper::getCurrentPeriode();
@@ -33,39 +41,60 @@ class ImportExportController extends Controller
      */
     public function processImport(Request $request)
     {
-        $currentPeriode = PeriodeHelper::getCurrentPeriode();
+        // DEBUG: Log semua input
+        \Log::info('=== IMPORT DEBUG ===');
+        \Log::info('All Input: ', $request->all());
+        \Log::info('Has File: ' . ($request->hasFile('excel_file') ? 'YES' : 'NO'));
         
+        if ($request->hasFile('excel_file')) {
+            $file = $request->file('excel_file');
+            \Log::info('File Name: ' . $file->getClientOriginalName());
+            \Log::info('File Size: ' . $file->getSize());
+        }
+        
+        // Validation - GANTI "file" jadi "excel_file"
         $request->validate([
             'excel_file' => 'required|mimes:xlsx,xls|max:10240',
+        ], [
+            'excel_file.required' => 'File Excel wajib diupload',
+            'excel_file.mimes' => 'File harus berformat .xlsx atau .xls',
+            'excel_file.max' => 'Ukuran file maksimal 10MB',
         ]);
 
         try {
-            $file = $request->file('excel_file');
-            $replaceExisting = $request->has('replace_existing');
+            $file = $request->file('excel_file'); // GANTI ini juga
+            $currentPeriode = \App\Helpers\PeriodeHelper::getCurrentPeriode();
             
-            // Import using StudentDataService with current periode
-            $result = $this->studentService->importFromExcel($file, $replaceExisting, $currentPeriode);
-
-            if ($result['success']) {
-                $message = "" . ($result['message'] ?? 'Import berhasil!');
-                $message .= " Ditambahkan: {$result['imported']}, Diupdate: {$result['updated']}";
-                $message .= " (Periode: {$currentPeriode})";
-                
-                if (!empty($result['errors'])) {
-                    return redirect()->route('dashboard')
-                        ->with('success', $message)
-                        ->with('import_errors', $result['errors']);
-                }
-
-                return redirect()->route('dashboard')->with('success', $message);
-            } else {
+            \Log::info('Starting import for periode: ' . $currentPeriode);
+            
+            // Import
+            $result = $this->studentService->importFromExcel($file);
+            
+            \Log::info('Import result: ', $result);
+            
+            if (!$result['success']) {
                 return redirect()->back()
-                    ->with('error', $result['message'] ?? 'Import gagal')
-                    ->with('import_errors', $result['errors'] ?? []);
+                    ->with('error', 'Import gagal: ' . $result['message']);
             }
+            
+            $message = "Import berhasil! ";
+            $message .= "Ditambahkan: {$result['imported']}, ";
+            $message .= "Diupdate: {$result['updated']} ";
+            $message .= "(Periode: {$currentPeriode})";
+            
+            if (isset($result['format'])) {
+                $message .= " | Format: {$result['format']}";
+            }
+            
+            return redirect()->route('students.index')
+                ->with('success', $message);
+                
         } catch (\Exception $e) {
+            \Log::error('Import exception: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
+            
             return redirect()->back()
-                ->with('error', 'Error: ' . $e->getMessage());
+                ->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
         }
     }
 

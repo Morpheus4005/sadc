@@ -79,7 +79,6 @@
                 <!-- Show selected file -->
                 <p id="fileName" class="mt-2 text-sm text-green-600 font-medium"></p>
             </div>
-
             <!-- Options -->
             <div class="bg-gray-50 p-4 rounded-lg mb-6">
                 <div class="flex items-start">

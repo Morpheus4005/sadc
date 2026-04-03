@@ -343,110 +343,78 @@
 </div>
 
 <!-- Delete All Modal -->
-<div id="deleteAllModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-    <div class="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-lg bg-white">
+<div id="deleteAllModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-lg bg-white">
         <div class="mt-3">
-            <!-- Header -->
-            <div class="flex items-center justify-between mb-6">
-                <h3 class="text-2xl font-bold text-red-600">
-                    <i class="fas fa-exclamation-triangle mr-2"></i>
-                    Peringatan: Hapus Semua Data
+            <!-- Icon -->
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+            </div>
+            
+            <!-- Content -->
+            <div class="mt-4 text-center">
+                <h3 class="text-lg font-semibold text-gray-900">
+                    Hapus Semua Data?
                 </h3>
-                <button onclick="closeDeleteAllModal()" class="text-gray-400 hover:text-gray-600">
-                    <i class="fas fa-times text-2xl"></i>
+                <p class="text-sm text-gray-500 mt-2">
+                    Apakah Anda yakin ingin menghapus <strong>SEMUA</strong> data mahasiswa?
+                </p>
+                <p class="text-xs text-red-600 mt-2">
+                    ⚠️ Tindakan ini akan menghapus data secara permanen dan tidak bisa dibatalkan!
+                </p>
+            </div>
+            
+            <!-- Buttons -->
+            <div class="flex gap-3 mt-6">
+                <button 
+                    onclick="closeDeleteAllModal()"
+                    class="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition"
+                >
+                    Tidak
                 </button>
-            </div>
-
-            <!-- Warning -->
-            <div class="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
-                <p class="text-red-800 font-semibold mb-2">
-                    <i class="fas fa-skull-crossbones mr-2"></i>
-                    Tindakan ini akan menghapus SEMUA data mahasiswa di periode:
-                </p>
-                <p class="text-red-900 font-bold text-lg ml-6">
-                    {{ \App\Helpers\PeriodeHelper::getCurrentPeriode() }}
-                </p>
-            </div>
-
-            <!-- Checkbox Option -->
-            <div class="mb-6">
-                <label class="flex items-start cursor-pointer p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100">
-                    <input 
-                        type="checkbox" 
-                        id="forceDeleteCheckbox" 
-                        class="mt-1 mr-3 h-5 w-5 text-red-600 focus:ring-red-500 border-gray-300 rounded"
-                    >
-                    <div>
-                        <p class="font-semibold text-gray-800">Hapus Permanen (Force Delete)</p>
-                        <p class="text-sm text-gray-600 mt-1">
-                            ✓ Data tidak bisa di-restore<br>
-                            ✓ Import ulang Excel yang sama akan buat data baru<br>
-                            ✓ Lebih bersih untuk reset periode
-                        </p>
-                    </div>
-                </label>
-                <p class="text-xs text-gray-500 mt-2 ml-2">
-                    <i class="fas fa-info-circle mr-1"></i>
-                    Jika tidak dicentang, data akan soft delete (bisa di-restore, import ulang akan update data lama)
-                </p>
-            </div>
-
-            <!-- Consequences -->
-            <div class="mb-6">
-                <p class="font-semibold text-gray-700 mb-3">Konsekuensi:</p>
-                <ul class="space-y-2 text-sm text-gray-600">
-                    <li><i class="fas fa-check text-red-500 mr-2"></i> Semua data mahasiswa ({{ $students->total() }}) akan terhapus</li>
-                    <li><i class="fas fa-check text-red-500 mr-2"></i> History dan activity log akan hilang</li>
-                    <li><i class="fas fa-check text-red-500 mr-2"></i> Snapshot mingguan akan terhapus</li>
-                    <li><i class="fas fa-check text-red-500 mr-2"></i> Proses ini TIDAK BISA dibatalkan</li>
-                </ul>
-            </div>
-
-            <!-- Form -->
-            <form action="{{ route('students.destroy-all') }}" method="POST" id="deleteAllForm">
-                @csrf
-                @method('DELETE')
-                
-                <input type="hidden" name="force_delete" id="forceDeleteInput" value="0">
-
-                <!-- Confirmation Input -->
-                <div class="mb-6">
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">
-                        Ketik "<span class="text-red-600">DELETE ALL DATA</span>" untuk konfirmasi:
-                    </label>
-                    <input 
-                        type="text" 
-                        name="confirmation" 
-                        id="deleteConfirmation"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                        placeholder="DELETE ALL DATA"
-                        autocomplete="off"
-                    >
-                </div>
-
-                <!-- Buttons -->
-                <div class="flex gap-4">
+                <form method="POST" action="{{ route('students.destroyAll') }}" class="flex-1">
+                    @csrf
+                    @method('DELETE')
+                    <input type="hidden" name="force_delete" value="1">
                     <button 
-                        type="button" 
-                        onclick="closeDeleteAllModal()"
-                        class="flex-1 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                        type="submit"
+                        class="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition"
                     >
-                        Batal
+                        Ya, Hapus
                     </button>
-                    <button 
-                        type="submit" 
-                        id="deleteAllButton"
-                        disabled
-                        class="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
-                    >
-                        <i class="fas fa-trash-alt mr-2"></i>
-                        Hapus Semua Data
-                    </button>
-                </div>
-            </form>
+                </form>
+            </div>
         </div>
     </div>
 </div>
+
+<script>
+// Show modal
+function showDeleteAllModal() {
+    document.getElementById('deleteAllModal').classList.remove('hidden');
+}
+
+// Close modal
+function closeDeleteAllModal() {
+    document.getElementById('deleteAllModal').classList.add('hidden');
+}
+
+// Close on outside click
+document.getElementById('deleteAllModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeDeleteAllModal();
+    }
+});
+
+// Close on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeDeleteAllModal();
+    }
+});
+</script>
 
 <script>
 // Update force delete input when checkbox changes
