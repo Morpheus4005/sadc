@@ -36,65 +36,78 @@ class ImportExportController extends Controller
         return view('import-export.import', compact('currentPeriode'));
     }
 
-    /**
-     * Process import
-     */
     public function processImport(Request $request)
     {
-        // DEBUG: Log semua input
-        \Log::info('=== IMPORT DEBUG ===');
-        \Log::info('All Input: ', $request->all());
-        \Log::info('Has File: ' . ($request->hasFile('excel_file') ? 'YES' : 'NO'));
-        
-        if ($request->hasFile('excel_file')) {
-            $file = $request->file('excel_file');
-            \Log::info('File Name: ' . $file->getClientOriginalName());
-            \Log::info('File Size: ' . $file->getSize());
-        }
-        
-        // Validation - GANTI "file" jadi "excel_file"
+        // RELAXED VALIDATION - accept more MIME types
         $request->validate([
-            'excel_file' => 'required|mimes:xlsx,xls|max:10240',
-        ], [
-            'excel_file.required' => 'File Excel wajib diupload',
-            'excel_file.mimes' => 'File harus berformat .xlsx atau .xls',
-            'excel_file.max' => 'Ukuran file maksimal 10MB',
+            'excel_file' => [
+                'required',
+                'file',
+                'max:10240', // 10MB
+                'mimes:xlsx,xls',
+                // Accept multiple MIME types for Excel files
+                function ($attribute, $value, $fail) {
+                    $allowedMimes = [
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+                        'application/vnd.ms-excel', // .xls
+                        'application/octet-stream', // Sometimes Excel files are detected as this
+                        'application/zip', // .xlsx is actually a ZIP file
+                    ];
+                    
+                    $fileMime = $value->getMimeType();
+                    $extension = strtolower($value->getClientOriginalExtension());
+                    
+                    // Accept if extension is correct OR MIME type is in allowed list
+                    if (!in_array($extension, ['xlsx', 'xls']) && !in_array($fileMime, $allowedMimes)) {
+                        $fail("File harus berformat Excel (.xlsx atau .xls). Detected MIME: {$fileMime}");
+                    }
+                }
+            ]
         ]);
-
+        
         try {
-            $file = $request->file('excel_file'); // GANTI ini juga
-            $currentPeriode = \App\Helpers\PeriodeHelper::getCurrentPeriode();
+            $file = $request->file('excel_file');
             
-            \Log::info('Starting import for periode: ' . $currentPeriode);
+            // Log for debugging
+            Log::info('Import file received:', [
+                'original_name' => $file->getClientOriginalName(),
+                'extension' => $file->getClientOriginalExtension(),
+                'mime_type' => $file->getMimeType(),
+                'size' => $file->getSize(),
+            ]);
             
-            // Import
-            $result = $this->studentService->importFromExcel($file);
-            
-            \Log::info('Import result: ', $result);
-            
-            if (!$result['success']) {
-                return redirect()->back()
-                    ->with('error', 'Import gagal: ' . $result['message']);
+            // Create temp directory if not exists
+            $tempDir = storage_path('app/imports');
+            if (!file_exists($tempDir)) {
+                mkdir($tempDir, 0755, true);
             }
             
-            $message = "Import berhasil! ";
-            $message .= "Ditambahkan: {$result['imported']}, ";
-            $message .= "Diupdate: {$result['updated']} ";
-            $message .= "(Periode: {$currentPeriode})";
+            // Save to temp location
+            $tempPath = $tempDir . '/' . time() . '_' . $file->getClientOriginalName();
+            $file->move($tempDir, basename($tempPath));
             
-            if (isset($result['format'])) {
-                $message .= " | Format: {$result['format']}";
+            // Import using service
+            $studentService = new \App\Services\StudentDataService();
+            $result = $studentService->importFromExcel($tempPath);
+            
+            // Delete temp file
+            if (file_exists($tempPath)) {
+                unlink($tempPath);
             }
             
-            return redirect()->route('students.index')
+            // Return with success message
+            $message = "Import berhasil! Ditambahkan: {$result['added']}, Diupdate: {$result['updated']}";
+            $message .= " (Periode: {$result['periode']}) | Format: {$result['format']}";
+            
+            return redirect()->route('import')
                 ->with('success', $message);
                 
         } catch (\Exception $e) {
-            \Log::error('Import exception: ' . $e->getMessage());
-            \Log::error('Stack trace: ' . $e->getTraceAsString());
+            Log::error('Import error: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
             
             return redirect()->back()
-                ->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
+                ->with('error', 'Import gagal: ' . $e->getMessage());
         }
     }
 

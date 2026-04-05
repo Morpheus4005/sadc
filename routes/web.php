@@ -29,16 +29,18 @@ Route::prefix('recap-sadc')->middleware(['auth', 'verified'])->group(function ()
     Route::delete('/periode/{periode}', [PeriodeController::class, 'destroy'])->name('periode.destroy');
     
     // Students Management
+    // IMPORTANT: Delete all MUST come BEFORE routes with {student} parameter!
+    Route::delete('/students/destroy-all', [StudentController::class, 'destroyAll'])->name('students.destroyAll');
+    Route::post('/students/{student}/update-status', [StudentController::class, 'updateStatus'])->name('students.update-status');
+    
+    // Students CRUD
     Route::get('/students', [StudentController::class, 'index'])->name('students.index');
     Route::get('/students/create', [StudentController::class, 'create'])->name('students.create');
     Route::post('/students', [StudentController::class, 'store'])->name('students.store');
     Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
     Route::get('/students/{student}/edit', [StudentController::class, 'edit'])->name('students.edit');
-    Route::delete('/students/destroy-all', [StudentController::class, 'destroyAll'])->name('students.destroyAll');
     Route::put('/students/{student}', [StudentController::class, 'update'])->name('students.update');
     Route::delete('/students/{student}', [StudentController::class, 'destroy'])->name('students.destroy');
-    Route::delete('/students-delete-all', [StudentController::class, 'destroyAll'])->name('students.destroy-all');
-    Route::post('/students/{student}/update-status', [StudentController::class, 'updateStatus'])->name('students.update-status');
     
     // Import/Export
     Route::get('/import', [ImportExportController::class, 'import'])->name('import');

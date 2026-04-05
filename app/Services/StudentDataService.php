@@ -201,6 +201,10 @@ class StudentDataService
         try {
             $worksheet = $spreadsheet->getSheet(0); // Sheet1
             
+            // FORCE CALCULATE ALL FORMULAS
+            $worksheet->getParent()->getCalculationEngine()->enableCalculationCache();
+            $worksheet->getParent()->setActiveSheetIndex(0);
+            
             // Unhide all rows
             foreach ($worksheet->getRowIterator() as $row) {
                 $worksheet->getRowDimension($row->getRowIndex())->setVisible(true);
@@ -212,7 +216,11 @@ class StudentDataService
             $currentPeriode = PeriodeHelper::getCurrentPeriode();
             $highestRow = $worksheet->getHighestRow();
             
-            Log::info("Processing NEW format: {$highestRow} rows");
+            // DEBUG: Check first data row
+            Log::info("Sample Row 2:");
+            Log::info("  NIM (G2): " . var_export($worksheet->getCell('G2')->getCalculatedValue(), true));
+            Log::info("  Name (H2): " . var_export($worksheet->getCell('H2')->getCalculatedValue(), true));
+            Log::info("  Binusian (I2): " . var_export($worksheet->getCell('I2')->getCalculatedValue(), true));
             
             // DEBUG: Check header row
             $headers = [];
@@ -245,20 +253,20 @@ class StudentDataService
                     // M: No Kontak Mahasiswa
                     // N: No Kontak Orangtua
                     
-                    $status = $this->cleanValue($worksheet->getCell("A{$row}")->getValue());
-                    $admitTerm = $this->cleanValue($worksheet->getCell("B{$row}")->getValue());
-                    $campus = $this->cleanValue($worksheet->getCell("C{$row}")->getValue());
-                    $program = $this->cleanValue($worksheet->getCell("D{$row}")->getValue());
-                    $academicCareer = $this->cleanValue($worksheet->getCell("E{$row}")->getValue());
-                    $binusianId = $this->cleanValue($worksheet->getCell("F{$row}")->getValue());
-                    $nim = $this->cleanValue($worksheet->getCell("G{$row}")->getValue());
-                    $name = $this->cleanValue($worksheet->getCell("H{$row}")->getValue());
-                    $binusian = $this->cleanValue($worksheet->getCell("I{$row}")->getValue());
-                    $reqTerm = $this->cleanValue($worksheet->getCell("J{$row}")->getValue());
-                    $status2520 = $this->cleanValue($worksheet->getCell("K{$row}")->getValue());
-                    $leaveStartForm = $this->cleanValue($worksheet->getCell("L{$row}")->getValue());
-                    $noKontakMhs = $this->cleanValue($worksheet->getCell("M{$row}")->getValue());
-                    $noKontakOrtu = $this->cleanValue($worksheet->getCell("N{$row}")->getValue());
+                    $status = $this->cleanValue($worksheet->getCell("A{$row}")->getCalculatedValue());
+                    $admitTerm = $this->cleanValue($worksheet->getCell("B{$row}")->getCalculatedValue());
+                    $campus = $this->cleanValue($worksheet->getCell("C{$row}")->getCalculatedValue());
+                    $program = $this->cleanValue($worksheet->getCell("D{$row}")->getCalculatedValue());
+                    $academicCareer = $this->cleanValue($worksheet->getCell("E{$row}")->getCalculatedValue());
+                    $binusianId = $this->cleanValue($worksheet->getCell("F{$row}")->getCalculatedValue());
+                    $nim = $this->cleanValue($worksheet->getCell("G{$row}")->getCalculatedValue());
+                    $name = $this->cleanValue($worksheet->getCell("H{$row}")->getCalculatedValue());
+                    $binusian = $this->cleanValue($worksheet->getCell("I{$row}")->getCalculatedValue());
+                    $reqTerm = $this->cleanValue($worksheet->getCell("J{$row}")->getCalculatedValue());
+                    $status2520 = $this->cleanValue($worksheet->getCell("K{$row}")->getCalculatedValue());
+                    $leaveStartForm = $this->cleanValue($worksheet->getCell("L{$row}")->getCalculatedValue());
+                    $noKontakMhs = $this->cleanValue($worksheet->getCell("M{$row}")->getCalculatedValue());
+                    $noKontakOrtu = $this->cleanValue($worksheet->getCell("N{$row}")->getCalculatedValue());
                     
                     // Skip empty rows
                     if (empty($nim) || empty($name)) {
@@ -588,7 +596,7 @@ class StudentDataService
     }
     
     /**
-     * Clean cell value
+     * Clean cell value - HANDLE EXCEL FORMULAS
      */
     private function cleanValue($value)
     {
@@ -596,10 +604,13 @@ class StudentDataService
             return null;
         }
         
-        // Handle formula values - keep the result
+        // For formula cells, PhpSpreadsheet usually returns the CALCULATED value, not the formula
+        // But sometimes it returns the formula string itself
         if (is_string($value) && str_starts_with($value, '=')) {
-            // For formulas, PhpSpreadsheet usually returns calculated value
-            // If it returns the formula string, we skip it
+            // Try to extract value from formula
+            // Example: "=LEFT(Table1[[#This Row],[NIM]],2)" should be skipped
+            // But we log it for debugging
+            Log::warning("Formula detected in cell: {$value}");
             return null;
         }
         

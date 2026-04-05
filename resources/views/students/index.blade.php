@@ -342,7 +342,7 @@
     </div>
 </div>
 
-<!-- Delete All Modal -->
+<!-- Delete All Modal - Simple Yes/No -->
 <div id="deleteAllModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
     <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-lg bg-white">
         <div class="mt-3">
@@ -377,7 +377,7 @@
                 <form method="POST" action="{{ route('students.destroyAll') }}" class="flex-1">
                     @csrf
                     @method('DELETE')
-                    <input type="hidden" name="force_delete" value="1">
+                    <!-- NO CHECKBOX! Just submit -->
                     <button 
                         type="submit"
                         class="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition"
@@ -389,6 +389,28 @@
         </div>
     </div>
 </div>
+
+<script>
+function showDeleteAllModal() {
+    document.getElementById('deleteAllModal').classList.remove('hidden');
+}
+
+function closeDeleteAllModal() {
+    document.getElementById('deleteAllModal').classList.add('hidden');
+}
+
+document.getElementById('deleteAllModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeDeleteAllModal();
+    }
+});
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeDeleteAllModal();
+    }
+});
+</script>
 
 <script>
 // Show modal

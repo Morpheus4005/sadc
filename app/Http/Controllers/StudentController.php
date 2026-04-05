@@ -216,45 +216,36 @@ class StudentController extends Controller
     }
 
     /**
-     * Delete all students in current periode
+     * Delete all students (NO VALIDATION NEEDED)
      */
     public function destroyAll(Request $request)
     {
-        $request->validate([
-            'confirmation' => 'required|in:DELETE ALL DATA',
-            'force_delete' => 'sometimes|boolean',
-        ]);
-
-        $currentPeriode = PeriodeHelper::getCurrentPeriode();
-        $forceDelete = $request->boolean('force_delete', true); // Default true
+        $currentPeriode = \App\Helpers\PeriodeHelper::getCurrentPeriode();
         
-        // COUNT students
-        $count = Student::where('periode_akademik', $currentPeriode)->count();
-        
-        if ($count === 0) {
-            return redirect()->route('students.index')
-                ->with('error', 'Tidak ada data untuk dihapus di periode ini.');
-        }
-
-        if ($forceDelete) {
-            // FORCE DELETE (permanent)
+        try {
+            // Always force delete (permanent)
+            $count = Student::where('periode_akademik', $currentPeriode)->count();
             Student::where('periode_akademik', $currentPeriode)->forceDelete();
-            $message = "✅ Berhasil menghapus permanen {$count} data mahasiswa di periode {$currentPeriode}";
-        } else {
-            // SOFT DELETE (can be restored)
-            Student::where('periode_akademik', $currentPeriode)->delete();
-            $message = "✅ Berhasil soft delete {$count} data mahasiswa di periode {$currentPeriode} (dapat di-restore)";
+            
+            $message = "Berhasil menghapus {$count} data mahasiswa secara PERMANEN (Periode: {$currentPeriode})";
+            
+            // Log activity
+            \App\Models\ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'delete_all',
+                'description' => "Menghapus semua data mahasiswa ({$count} records) periode {$currentPeriode}",
+                'periode_akademik' => $currentPeriode,
+            ]);
+            
+            return redirect()->route('students.index')
+                ->with('success', $message);
+                
+        } catch (\Exception $e) {
+            \Log::error('Delete all error: ' . $e->getMessage());
+            
+            return redirect()->back()
+                ->with('error', 'Gagal menghapus data: ' . $e->getMessage());
         }
-
-        // Log activity
-        ActivityLog::create([
-            'user_id' => auth()->id(),
-            'action' => $forceDelete ? 'force_delete_all' : 'soft_delete_all',
-            'description' => "Menghapus " . ($forceDelete ? 'permanen' : 'soft delete') . " semua data mahasiswa ({$count} mahasiswa) di periode {$currentPeriode}",
-            'periode_akademik' => $currentPeriode,
-        ]);
-
-        return redirect()->route('students.index')->with('success', $message);
     }
 
     /**
