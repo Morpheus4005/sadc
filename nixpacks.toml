@@ -1,0 +1,16 @@
+[phases.setup]
+nixPkgs = ["php", "phpExtensions.pdo", "phpExtensions.mbstring", "phpExtensions.bcmath", "phpExtensions.openssl", "composer"]
+
+[phases.install]
+cmds = ["composer install --no-dev --optimize-autoloader"]
+
+[phases.build]
+cmds = [
+  "php artisan config:clear",
+  "php artisan cache:clear",
+  "php artisan config:cache",
+  "php artisan migrate --force"
+]
+
+[start]
+cmd = "php -S 0.0.0.0:$PORT -t public"
