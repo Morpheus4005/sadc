@@ -1,5 +1,14 @@
 [phases.setup]
-nixPkgs = ["php", "phpExtensions.pdo", "phpExtensions.mbstring", "phpExtensions.bcmath", "phpExtensions.openssl", "composer"]
+nixPkgs = [
+  "php", 
+  "phpExtensions.pdo", 
+  "phpExtensions.mbstring", 
+  "phpExtensions.bcmath", 
+  "phpExtensions.openssl",
+  "phpExtensions.zip",
+  "phpExtensions.gd", 
+  "composer"
+]
 
 [phases.install]
 cmds = ["composer install --no-dev --optimize-autoloader"]
@@ -10,6 +19,8 @@ cmds = [
   "php artisan cache:clear",
   "php artisan config:cache",
   "php artisan migrate --force"
+  "chmod -R 775 storage",
+  "chmod -R 775 bootstrap/cache"
 ]
 
 [start]

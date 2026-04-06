@@ -112,6 +112,12 @@ class StudentDataService
                         $statusWarna = $this->mapTindakLanjutToStatus($tindakLanjut);
                     }
                     
+                    // GABUNGKAN keterangan ke notes_srsc
+                    $notesSrscFull = $notesSrsc;
+                    if ($keterangan) {
+                        $notesSrscFull .= ($notesSrsc ? ' | ' : '') . $keterangan;
+                    }
+                    
                     // Check if student exists
                     $existingStudent = Student::withTrashed()
                         ->where('nim', $nim)
@@ -139,9 +145,9 @@ class StudentDataService
                             'study_target_14' => $studyTarget14,
                             'prediksi_smt_selesai' => $prediksiSmtSelesai,
                             'no_hp' => $noHp,
-                            'notes_srsc' => $notesSrsc,
+                            'notes_srsc' => $notesSrscFull, // GABUNGAN
                             'status_warna' => $statusWarna,
-                            'keterangan' => $keterangan,
+                            // HAPUS 'keterangan'
                         ]);
                         
                         $updated++;
@@ -164,9 +170,9 @@ class StudentDataService
                             'study_target_14' => $studyTarget14,
                             'prediksi_smt_selesai' => $prediksiSmtSelesai,
                             'no_hp' => $noHp,
-                            'notes_srsc' => $notesSrsc,
+                            'notes_srsc' => $notesSrscFull, // GABUNGAN
                             'status_warna' => $statusWarna,
-                            'keterangan' => $keterangan,
+                            // HAPUS 'keterangan'
                         ]);
                         
                         $imported++;
@@ -182,10 +188,11 @@ class StudentDataService
             
             return [
                 'success' => true,
-                'imported' => $imported,
+                'added' => $imported,
                 'updated' => $updated,
                 'errors' => $errors,
                 'format' => 'OLD (Data All)',
+                'periode' => $currentPeriode,
             ];
             
         } catch (\Exception $e) {
@@ -216,18 +223,13 @@ class StudentDataService
             $currentPeriode = PeriodeHelper::getCurrentPeriode();
             $highestRow = $worksheet->getHighestRow();
             
+            Log::info("Processing NEW format: {$highestRow} rows");
+            
             // DEBUG: Check first data row
             Log::info("Sample Row 2:");
             Log::info("  NIM (G2): " . var_export($worksheet->getCell('G2')->getCalculatedValue(), true));
             Log::info("  Name (H2): " . var_export($worksheet->getCell('H2')->getCalculatedValue(), true));
             Log::info("  Binusian (I2): " . var_export($worksheet->getCell('I2')->getCalculatedValue(), true));
-            
-            // DEBUG: Check header row
-            $headers = [];
-            for ($col = 'A'; $col <= 'N'; $col++) {
-                $headers[$col] = $worksheet->getCell("{$col}1")->getValue();
-            }
-            Log::info("Header row: ", $headers);
             
             $imported = 0;
             $updated = 0;
@@ -238,21 +240,7 @@ class StudentDataService
             for ($row = 2; $row <= $highestRow; $row++) {
                 try {
                     // NEW FORMAT - 14 columns
-                    // A: Status
-                    // B: Admit Term
-                    // C: Campus
-                    // D: Program
-                    // E: Academic Career
-                    // F: Binusian ID
-                    // G: NIM
-                    // H: Name
-                    // I: Binusian
-                    // J: Req. Term
-                    // K: Status 25.20
-                    // L: Leave Start Form
-                    // M: No Kontak Mahasiswa
-                    // N: No Kontak Orangtua
-                    
+                    // USE getCalculatedValue() for formula cells
                     $status = $this->cleanValue($worksheet->getCell("A{$row}")->getCalculatedValue());
                     $admitTerm = $this->cleanValue($worksheet->getCell("B{$row}")->getCalculatedValue());
                     $campus = $this->cleanValue($worksheet->getCell("C{$row}")->getCalculatedValue());
@@ -268,6 +256,11 @@ class StudentDataService
                     $noKontakMhs = $this->cleanValue($worksheet->getCell("M{$row}")->getCalculatedValue());
                     $noKontakOrtu = $this->cleanValue($worksheet->getCell("N{$row}")->getCalculatedValue());
                     
+                    // DEBUG log first few rows
+                    if ($row <= 5) {
+                        Log::info("Row {$row}: NIM='{$nim}', Name='{$name}', Binusian='{$binusian}'");
+                    }
+                    
                     // Skip empty rows
                     if (empty($nim) || empty($name)) {
                         $skipped++;
@@ -282,20 +275,26 @@ class StudentDataService
                     $tindakLanjut = $status; // Use main status as tindak lanjut
                     $statusWarna = $this->mapStatusNewFormat($status, $status2520);
                     
-                    // Combine notes
-                    $notesSrsc = "Status 25.20: {$status2520}";
+                    // GABUNGKAN semua notes ke notes_srsc
+                    $notesParts = [];
+                    if ($status2520) {
+                        $notesParts[] = "Status 25.20: {$status2520}";
+                    }
                     if ($leaveStartForm) {
-                        $notesSrsc .= " | Leave Form: {$leaveStartForm}";
+                        $notesParts[] = "Leave Form: {$leaveStartForm}";
+                    }
+                    if ($reqTerm) {
+                        $notesParts[] = "Req Term: {$reqTerm}";
+                    }
+                    if ($noKontakOrtu) {
+                        $notesParts[] = "Kontak Ortu: {$noKontakOrtu}";
                     }
                     
-                    $keterangan = "Req Term: {$reqTerm}";
-                    if ($noKontakOrtu) {
-                        $keterangan .= " | Kontak Ortu: {$noKontakOrtu}";
-                    }
+                    $notesSrscFull = implode(' | ', $notesParts);
                     
                     // Log every 50 rows
                     if ($row % 50 === 0) {
-                        Log::info("Row {$row}: NIM={$nim}, Status={$status}, Status2520={$status2520}, StatusWarna={$statusWarna}");
+                        Log::info("Row {$row}: NIM={$nim}, Status={$status}, StatusWarna={$statusWarna}");
                     }
                     
                     // Check if student exists
@@ -318,16 +317,16 @@ class StudentDataService
                             'binusian' => $binusian,
                             'name' => $name,
                             'tindak_lanjut' => $tindakLanjut,
-                            'evaluasi' => null, // Not in new format
+                            'evaluasi' => null,
                             'sks_kumulatif' => null,
                             'sks_sisa' => null,
                             'study_target_10' => null,
                             'study_target_14' => null,
                             'prediksi_smt_selesai' => $leaveStartForm,
                             'no_hp' => $noKontakMhs,
-                            'notes_srsc' => $notesSrsc,
+                            'notes_srsc' => $notesSrscFull, // GABUNGAN SEMUA
                             'status_warna' => $statusWarna,
-                            'keterangan' => $keterangan,
+                            // HAPUS 'keterangan'
                         ]);
                         
                         $updated++;
@@ -350,9 +349,9 @@ class StudentDataService
                             'study_target_14' => null,
                             'prediksi_smt_selesai' => $leaveStartForm,
                             'no_hp' => $noKontakMhs,
-                            'notes_srsc' => $notesSrsc,
+                            'notes_srsc' => $notesSrscFull, // GABUNGAN SEMUA
                             'status_warna' => $statusWarna,
-                            'keterangan' => $keterangan,
+                            // HAPUS 'keterangan'
                         ]);
                         
                         $imported++;
@@ -368,10 +367,11 @@ class StudentDataService
             
             return [
                 'success' => true,
-                'imported' => $imported,
+                'added' => $imported,
                 'updated' => $updated,
                 'errors' => $errors,
                 'format' => 'NEW (Sheet1)',
+                'periode' => $currentPeriode,
             ];
             
         } catch (\Exception $e) {
@@ -496,10 +496,9 @@ class StudentDataService
             'FFFF99' => 'Terhubung Tapi Tidak Merespon',
             'FFEB9C' => 'Terhubung Tapi Tidak Merespon',
             
-            // ORANGE - Konfirmasi DO (NEW!)
+            // ORANGE - Konfirmasi DO
             'FFA500' => 'Konfirmasi DO',
             'FF8C00' => 'Konfirmasi DO',
-            'FFA500' => 'Konfirmasi DO',
             'ED7D31' => 'Konfirmasi DO',
             'F4B183' => 'Konfirmasi DO',
             'FFC000' => 'Konfirmasi DO',
@@ -558,7 +557,7 @@ class StudentDataService
             'Sudah Terdata Aktif 25.2' => 'Re-active',
             'Merespon' => 'Merespon tapi belum re-active',
             'Mengajukan Undur Diri/DO' => 'Undur Diri',
-            'Konfirmasi DO' => 'Konfirmasi DO', // NEW!
+            'Konfirmasi DO' => 'Konfirmasi DO',
             'Belum Terhubung' => 'Tidak Terhubung',
             'Terhubung Tapi Tidak Merespon' => 'Terhubung Tapi Tidak Merespon',
             'Unofficial Leave' => 'Tidak Terhubung',
@@ -592,7 +591,7 @@ class StudentDataService
             return 'Undur Diri';
         }
         
-        return null; // Empty status for unknown
+        return null;
     }
     
     /**
@@ -604,12 +603,9 @@ class StudentDataService
             return null;
         }
         
-        // For formula cells, PhpSpreadsheet usually returns the CALCULATED value, not the formula
+        // For formula cells, PhpSpreadsheet usually returns the CALCULATED value
         // But sometimes it returns the formula string itself
         if (is_string($value) && str_starts_with($value, '=')) {
-            // Try to extract value from formula
-            // Example: "=LEFT(Table1[[#This Row],[NIM]],2)" should be skipped
-            // But we log it for debugging
             Log::warning("Formula detected in cell: {$value}");
             return null;
         }
