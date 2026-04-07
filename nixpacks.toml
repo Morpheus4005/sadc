@@ -20,7 +20,8 @@ cmds = [
   "php artisan config:cache",
   "php artisan migrate --force"
   "chmod -R 775 storage",
-  "chmod -R 775 bootstrap/cache"
+  "chmod -R 775 bootstrap/cache",
+  "composer install --no-dev --optimize-autoloader",
   "php artisan migrate --force"
 ]
 
