@@ -21,6 +21,7 @@ cmds = [
   "php artisan migrate --force"
   "chmod -R 775 storage",
   "chmod -R 775 bootstrap/cache"
+  "php artisan migrate --force"
 ]
 
 [start]
