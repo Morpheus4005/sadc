@@ -15,14 +15,15 @@ cmds = ["composer install --no-dev --optimize-autoloader"]
 
 [phases.build]
 cmds = [
+  "composer install --no-dev --optimize-autoloader",
+  "php artisan key:generate",
   "php artisan config:clear",
   "php artisan cache:clear",
   "php artisan config:cache",
-  "php artisan migrate --force"
+  "php artisan migrate --force",
+  "php artisan db:seed --force",
   "chmod -R 775 storage",
-  "chmod -R 775 bootstrap/cache",
-  "composer install --no-dev --optimize-autoloader",
-  "php artisan migrate --force"
+  "chmod -R 775 bootstrap/cache"
 ]
 
 [start]
